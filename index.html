@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 
-<meta http-equiv="content-type" content="text/html;charset=utf-8" /><!-- /Added by HTTrack -->
+<meta http-equiv="content-type" content="text/html;charset=utf-8" />
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -653,7 +653,7 @@
 
     <div class="card">
 
-      <form id="intakeForm" name="rental-assistance-application" method="POST" data-netlify="true" netlify-honeypot="bot-field" enctype="multipart/form-data">
+      <form id="intakeForm" name="rental-assistance-application" method="POST" data-netlify="true" data-netlify-honeypot="bot-field" enctype="multipart/form-data">
         <input type="hidden" name="form-name" value="rental-assistance-application">
         <p hidden><label>Don’t fill this out: <input name="bot-field"></label></p>
         <input type="hidden" name="_subject" value="New Rental Assistance Application">
@@ -948,43 +948,75 @@
 
     const submitButton = form.querySelector('button[type="submit"]');
     const submitError = document.getElementById('submitError');
+
     if(submitButton) submitButton.disabled = true;
     if(submitError) submitError.classList.remove('visible');
 
     try {
       const formData = new FormData(form);
-      const response = await fetch(window.location.pathname || '/', {
+
+      // Submit to Netlify Forms first.
+      // Do not manually set Content-Type because FormData contains file uploads.
+      const response = await fetch('/', {
         method: 'POST',
         body: formData,
-        headers: { 'Accept': 'text/html' },
-        redirect: 'follow'
+        headers: {
+          'Accept': 'text/html'
+        }
       });
 
-      if(!response.ok) throw new Error('Netlify submission failed');
+      if(!response.ok) {
+        throw new Error('Netlify submission failed: HTTP ' + response.status);
+      }
 
-      // Notify Make without sending any form fields.
+      // Netlify accepted the form. Now trigger your Make.com automation.
+      // The full form is NOT sent to Make from the browser here.
+      // Netlify remains the system receiving the submitted form data/files.
       try {
         await fetch('https://hook.us2.make.com/crm3oh52bb0g696pxoctjiuyfxf123a9', {
           method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+          headers: {
+            'Content-Type': 'text/plain;charset=UTF-8'
+          },
           body: 'new-rental-assistance-application',
           mode: 'no-cors',
           keepalive: true
         });
-      } catch(notificationError) {
-        // The Netlify submission succeeded even if the notification request fails.
-        console.warn('Notification trigger failed:', notificationError);
+      } catch(makeError) {
+        console.warn('Make.com notification failed:', makeError);
+        // Do not tell the applicant the Netlify submission failed.
+        // Netlify has already accepted the application.
       }
 
       const refId = document.getElementById('refId');
       const applicationId = document.getElementById('applicationId');
-      if(refId && applicationId) refId.textContent = applicationId.value;
+
+      if(refId && applicationId) {
+        refId.textContent = applicationId.value;
+      }
+
       form.hidden = true;
-      if(confirmPanel) confirmPanel.hidden = false;
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      if(confirmPanel) {
+        confirmPanel.hidden = false;
+      }
+
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+
     } catch(error) {
-      console.error(error);
-      if(submitError) submitError.classList.add('visible');
+      console.error('Form submission error:', error);
+
+      if(submitError) {
+        submitError.classList.add('visible');
+        submitError.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
+        });
+      }
+
       if(submitButton) submitButton.disabled = false;
     }
   });
